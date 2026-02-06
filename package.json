@@ -1,0 +1,19 @@
+{
+  "name": "bayit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "בית — Hebrew RTL PWA for household task management",
+  "workspaces": [
+    "apps/web",
+    "apps/backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  }
+}
