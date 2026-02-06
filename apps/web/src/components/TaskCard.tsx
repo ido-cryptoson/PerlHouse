@@ -34,9 +34,9 @@ export default function TaskCard({ task, variant, onClick }: TaskCardProps) {
             <h3 dir="auto" className={`font-semibold leading-tight ${variant === "done" ? "text-sm text-stone-500 line-through" : "text-base text-stone-800"}`} style={{ unicodeBidi: "plaintext" }}>
               {task.title}
             </h3>
-            {task.owner_display_name && variant !== "done" && (
+            {task.owner_name && variant !== "done" && (
               <div className="flex-shrink-0 w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 text-xs font-semibold">
-                {task.owner_display_name.charAt(0)}
+                {task.owner_name.charAt(0)}
               </div>
             )}
           </div>
@@ -45,13 +45,13 @@ export default function TaskCard({ task, variant, onClick }: TaskCardProps) {
             {variant !== "done" && task.due_date && <span className={`text-xs font-medium ${isOverdue ? "text-red-500" : "text-stone-400"}`}>{formatDueDate(task.due_date)}</span>}
             {variant !== "done" && task.due_time && <span className="text-xs text-stone-400">{task.due_time}</span>}
           </div>
-          {variant === "pending" && task.source_preview && (
-            <p dir="auto" className="mt-2 text-xs text-stone-400 truncate" style={{ unicodeBidi: "plaintext" }}>{task.source_preview}</p>
+          {variant === "pending" && task.source_raw && (
+            <p dir="auto" className="mt-2 text-xs text-stone-400 truncate" style={{ unicodeBidi: "plaintext" }}>{task.source_raw}</p>
           )}
-          {variant === "pending" && task.ai_suggestion && (
+          {variant === "pending" && task.reply_suggestion && (
             <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
               <span className="text-xs">💡</span>
-              <span dir="auto" className="text-xs text-amber-700" style={{ unicodeBidi: "plaintext" }}>{task.ai_suggestion}</span>
+              <span dir="auto" className="text-xs text-amber-700" style={{ unicodeBidi: "plaintext" }}>{task.reply_suggestion}</span>
             </div>
           )}
         </div>

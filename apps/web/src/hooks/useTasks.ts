@@ -16,9 +16,9 @@ export function useTasks() {
   const fetchTasks = useCallback(async () => {
     if (!householdId) return;
     setLoading(true);
-    const { data, error: e } = await supabase.from("tasks").select("*, owner:members!tasks_owner_id_fkey(id, display_name, avatar_url)").eq("household_id", householdId).neq("status", "rejected").order("created_at", { ascending: false });
+    const { data, error: e } = await supabase.from("tasks").select("*, owner:members!tasks_owner_id_fkey(id, name, avatar_url)").eq("household_id", householdId).neq("status", "rejected").order("created_at", { ascending: false });
     if (e) setError(e.message);
-    else setTasks((data ?? []).map((r: any) => ({ ...r, owner_display_name: r.owner?.display_name ?? null, owner_avatar_url: r.owner?.avatar_url ?? null })));
+    else setTasks((data ?? []).map((r: any) => ({ ...r, owner_name: r.owner?.name ?? null, owner_avatar_url: r.owner?.avatar_url ?? null })));
     setLoading(false);
   }, [supabase, householdId]);
 
@@ -35,12 +35,13 @@ export function useTasks() {
   }, [supabase, householdId]);
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-    const { error: e } = await supabase.from("tasks").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    const { owner_name, owner_avatar_url, ...dbUpdates } = updates;
+    const { error: e } = await supabase.from("tasks").update({ ...dbUpdates, updated_at: new Date().toISOString() } as any).eq("id", id);
     if (e) setError(e.message);
   }, [supabase]);
 
   const deleteTask = useCallback(async (id: string) => {
-    const { error: e } = await supabase.from("tasks").delete().eq("id", id);
+    const { error: e } = await supabase.from("tasks").delete().eq("id" as any, id);
     if (e) setError(e.message);
   }, [supabase]);
 

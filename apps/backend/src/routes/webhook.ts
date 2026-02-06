@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { GreenAPIWebhookPayload, TaskInsert, TaskCategory } from '../types';
 import { extractTasks } from '../services/ai';
-import { downloadMedia, sendMessage } from '../services/greenapi';
+import { downloadMedia, sendMessage, readChat } from '../services/greenapi';
 import { transcribeVoiceNote } from '../services/stt';
 import { createTask, getMemberByPhone, getHouseholdMembers } from '../services/supabase';
 import { notifyHouseholdMembers } from '../services/notifications';
@@ -29,6 +29,9 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
     const senderPhone = senderData.sender.replace('@c.us', '');
 
     console.log(`[Webhook] Processing ${typeMessage} from ${senderData.senderName} (${chatId})`);
+
+    // Mark message as read (human-like behavior)
+    try { await readChat(chatId, idMessage); } catch {};
 
     const member = await getMemberByPhone(senderPhone);
     if (!member) {

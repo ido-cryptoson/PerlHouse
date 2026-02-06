@@ -15,13 +15,16 @@ export function useAuth() {
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
+      console.log('[useAuth] user:', u?.id, u?.email);
       if (!u) { setLoading(false); return; }
       setUser(u);
-      const { data: m } = await supabase.from("members").select("*").eq("user_id", u.id).single();
+      const { data: m, error: mErr } = await supabase.from("members").select("*").eq("user_id", u.id).single();
+      console.log('[useAuth] member:', m, 'error:', mErr);
       if (m) {
-        setMember(m);
-        const { data: h } = await supabase.from("households").select("*, members(*)").eq("id", m.household_id).single();
-        if (h) setHousehold(h as any);
+        setMember(m as Member);
+        const { data: h, error: hErr } = await supabase.from("households").select("*, members(*)").eq("id", m.household_id).single();
+        console.log('[useAuth] household:', h, 'error:', hErr);
+        if (h) setHousehold(h as Household & { members: Member[] });
       }
       setLoading(false);
     };

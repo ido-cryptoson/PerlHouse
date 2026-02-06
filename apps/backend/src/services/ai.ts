@@ -62,7 +62,13 @@ export async function extractTasks(
       const textBlock = response.content.find((b) => b.type === 'text');
       if (!textBlock || textBlock.type !== 'text') throw new Error('No text in response');
 
-      return JSON.parse(textBlock.text) as TaskExtraction;
+      let raw = textBlock.text.trim();
+      // Strip markdown code fences if present
+      if (raw.startsWith('```')) {
+        raw = raw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      }
+
+      return JSON.parse(raw) as TaskExtraction;
     } catch (error) {
       console.error(`[AI] Attempt ${attempt} failed:`, error);
       if (attempt === 2) {

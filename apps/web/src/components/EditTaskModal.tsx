@@ -50,7 +50,7 @@ export default function EditTaskModal({ task, onSave, onClose }: { task: Task; o
             <label className="block text-sm font-medium text-stone-600 mb-1">אחראי/ת</label>
             <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
               <option value="">לא הוקצה</option>
-              {members.map((m) => <option key={m.id} value={m.id}>{m.display_name}</option>)}
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">

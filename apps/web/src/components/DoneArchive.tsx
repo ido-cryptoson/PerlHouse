@@ -29,9 +29,9 @@ export default function DoneArchive({ tasks }: { tasks: Task[] }) {
 
   const grouped = useMemo(() => {
     const groups: Record<string, { label: string; tasks: Task[] }> = {};
-    const sorted = [...filtered].sort((a, b) => new Date(b.completed_at ?? b.updated_at).getTime() - new Date(a.completed_at ?? a.updated_at).getTime());
+    const sorted = [...filtered].sort((a, b) => new Date(b.completed_at ?? b.updated_at ?? b.created_at ?? 0).getTime() - new Date(a.completed_at ?? a.updated_at ?? a.created_at ?? 0).getTime());
     for (const task of sorted) {
-      const dateStr = task.completed_at ?? task.updated_at;
+      const dateStr = task.completed_at ?? task.updated_at ?? task.created_at ?? new Date().toISOString();
       const key = getWeekKey(dateStr);
       if (!groups[key]) groups[key] = { label: getHebrewWeekHeader(dateStr), tasks: [] };
       groups[key].tasks.push(task);

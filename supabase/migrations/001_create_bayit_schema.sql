@@ -3,8 +3,6 @@
 -- Household task management for Hebrew-speaking couples
 -- ================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Custom Enum Types
 CREATE TYPE task_status AS ENUM ('pending', 'active', 'done', 'rejected');
 CREATE TYPE task_category AS ENUM ('בית', 'ילדים', 'כספים', 'בריאות', 'קניות', 'רכב', 'כללי');
@@ -12,14 +10,14 @@ CREATE TYPE source_type AS ENUM ('whatsapp_text', 'whatsapp_image', 'whatsapp_vo
 
 -- Tables
 CREATE TABLE households (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   invite_code TEXT UNIQUE DEFAULT substr(md5(random()::text), 1, 8),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE members (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   household_id UUID REFERENCES households(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -51,7 +49,7 @@ CREATE TRIGGER enforce_household_member_limit
 
 -- Tasks
 CREATE TABLE tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   status task_status NOT NULL DEFAULT 'pending',
   title TEXT NOT NULL,

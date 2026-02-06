@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import webhookRouter from './routes/webhook';
+import setupRouter from './routes/setup';
 
 const app = express();
 const PORT = parseInt(process.env.BACKEND_PORT ?? '3001', 10);
@@ -16,6 +17,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Green API webhook
 app.use('/api/webhook', webhookRouter);
+
+// Green API setup/admin
+app.use('/api/setup', setupRouter);
 
 // 404
 app.use((_req: Request, res: Response) => {
@@ -35,6 +39,7 @@ app.listen(PORT, () => {
   console.log(`[Bayit Backend] Running on port ${PORT}`);
   console.log(`[Bayit Backend] Health: http://localhost:${PORT}/api/health`);
   console.log(`[Bayit Backend] Webhook: http://localhost:${PORT}/api/webhook/greenapi`);
+  console.log(`[Bayit Backend] Setup:   http://localhost:${PORT}/api/setup/status`);
 });
 
 export default app;

@@ -57,6 +57,10 @@ export default function PendingInbox({ tasks, onApprove, onReject, onUpdate }: P
             </div>
             <div style={{ transform: `translateX(${swipeX}px)`, transition: swipeX === 0 ? "transform 0.3s ease-out" : "none" }} onTouchStart={(e) => handleTouchStart(task.id, e)} onTouchMove={(e) => handleTouchMove(task.id, e)} onTouchEnd={() => handleTouchEnd(task.id)} onClick={() => setEditingTask(task)} className="relative cursor-pointer">
               <TaskCard task={task} variant="pending" />
+              <div className="absolute top-2 left-2 flex gap-1.5 z-10" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => onApprove(task.id)} className="w-8 h-8 rounded-full bg-green-100 hover:bg-green-300 flex items-center justify-center transition-colors" title="אישור">✅</button>
+                <button onClick={() => onReject(task.id)} className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-300 flex items-center justify-center transition-colors" title="דחייה">❌</button>
+              </div>
             </div>
           </div>
         );

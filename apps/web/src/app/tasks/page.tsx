@@ -7,6 +7,7 @@ import ActiveBoard from "@/components/ActiveBoard";
 import DoneArchive from "@/components/DoneArchive";
 import BottomNav from "@/components/BottomNav";
 import { useTasks } from "@/hooks/useTasks";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export type TabKey = "pending" | "active" | "done";
 
@@ -14,6 +15,7 @@ export default function TasksPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const { member, household } = useAuth();
   const { tasks, loading, updateTask } = useTasks();
+  usePushNotifications();
 
   const pendingTasks = tasks.filter((t) => t.status === "pending");
   const activeTasks = tasks.filter((t) => t.status === "active");
@@ -34,7 +36,7 @@ export default function TasksPage() {
           </div>
           {member && (
             <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-semibold text-sm">
-              {member.display_name?.charAt(0) ?? "?"}
+              {member.name?.charAt(0) ?? "?"}
             </div>
           )}
         </div>
