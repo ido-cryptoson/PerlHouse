@@ -19,7 +19,7 @@ export async function middleware(request: NextRequest) {
   );
   const { data: { session } } = await supabase.auth.getSession();
   const { pathname } = request.nextUrl;
-  if (!session && pathname !== "/login" && !pathname.startsWith("/_next") && !pathname.startsWith("/api") && pathname !== "/manifest.json" && pathname !== "/favicon.ico") {
+  if (!session && pathname !== "/login" && !pathname.startsWith("/_next") && !pathname.startsWith("/api") && !pathname.startsWith("/auth") && pathname !== "/manifest.json" && pathname !== "/favicon.ico") {
     const url = request.nextUrl.clone(); url.pathname = "/login";
     return NextResponse.redirect(url);
   }
