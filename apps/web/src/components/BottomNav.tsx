@@ -6,6 +6,7 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: "pending", label: "ממתין", icon: "📥" },
   { key: "active", label: "פעיל", icon: "⚡" },
   { key: "done", label: "בוצע", icon: "✅" },
+  { key: "weather", label: "מזג אוויר", icon: "🌤️" },
 ];
 
 export default function BottomNav({ activeTab, onTabChange, pendingCount }: { activeTab: TabKey; onTabChange: (tab: TabKey) => void; pendingCount: number }) {

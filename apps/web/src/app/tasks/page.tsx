@@ -8,8 +8,9 @@ import DoneArchive from "@/components/DoneArchive";
 import BottomNav from "@/components/BottomNav";
 import { useTasks } from "@/hooks/useTasks";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import WeatherTab from "@/components/WeatherTab";
 
-export type TabKey = "pending" | "active" | "done";
+export type TabKey = "pending" | "active" | "done" | "weather";
 
 export default function TasksPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
@@ -52,6 +53,7 @@ export default function TasksPage() {
             {activeTab === "pending" && <PendingInbox tasks={pendingTasks} onApprove={(id) => updateTask(id, { status: "active" })} onReject={(id) => updateTask(id, { status: "rejected" })} onUpdate={updateTask} />}
             {activeTab === "active" && <ActiveBoard tasks={activeTasks} currentMemberId={member?.id} onDone={(id) => updateTask(id, { status: "done", completed_at: new Date().toISOString() })} onUpdate={updateTask} />}
             {activeTab === "done" && <DoneArchive tasks={doneTasks} onUndo={(id) => updateTask(id, { status: "active", completed_at: null })} onDelete={(id) => deleteTask(id)} />}
+            {activeTab === "weather" && <WeatherTab />}
           </>
         )}
       </main>
