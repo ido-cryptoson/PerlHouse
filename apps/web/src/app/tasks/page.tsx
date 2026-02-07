@@ -14,7 +14,7 @@ export type TabKey = "pending" | "active" | "done";
 export default function TasksPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const { member, household } = useAuth();
-  const { tasks, loading, updateTask } = useTasks();
+  const { tasks, loading, updateTask, deleteTask } = useTasks();
   usePushNotifications();
 
   const pendingTasks = tasks.filter((t) => t.status === "pending");
@@ -51,7 +51,7 @@ export default function TasksPage() {
           <>
             {activeTab === "pending" && <PendingInbox tasks={pendingTasks} onApprove={(id) => updateTask(id, { status: "active" })} onReject={(id) => updateTask(id, { status: "rejected" })} onUpdate={updateTask} />}
             {activeTab === "active" && <ActiveBoard tasks={activeTasks} currentMemberId={member?.id} onDone={(id) => updateTask(id, { status: "done", completed_at: new Date().toISOString() })} onUpdate={updateTask} />}
-            {activeTab === "done" && <DoneArchive tasks={doneTasks} />}
+            {activeTab === "done" && <DoneArchive tasks={doneTasks} onUndo={(id) => updateTask(id, { status: "active", completed_at: null })} onDelete={(id) => deleteTask(id)} />}
           </>
         )}
       </main>

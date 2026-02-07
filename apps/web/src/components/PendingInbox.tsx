@@ -1,115 +1,16 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState } from "react";
 import type { Task } from "@/types/database";
 import TaskCard from "./TaskCard";
 import EditTaskModal from "./EditTaskModal";
+import SwipeableCard from "./SwipeableCard";
 
 interface PendingInboxProps {
   tasks: Task[];
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onUpdate: (id: string, data: Partial<Task>) => void;
-}
-
-function SwipeableCard({
-  task,
-  onApprove,
-  onReject,
-  onTap,
-}: {
-  task: Task;
-  onApprove: () => void;
-  onReject: () => void;
-  onTap: () => void;
-}) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const startX = useRef(0);
-  const currentX = useRef(0);
-  const swiping = useRef(false);
-  const [offsetX, setOffsetX] = useState(0);
-
-  // Stable refs for callbacks — avoids re-registering listeners on every render
-  const onApproveRef = useRef(onApprove);
-  const onRejectRef = useRef(onReject);
-  onApproveRef.current = onApprove;
-  onRejectRef.current = onReject;
-
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX.current = e.touches[0].clientX;
-      currentX.current = 0;
-      swiping.current = false;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      const delta = e.touches[0].clientX - startX.current;
-      currentX.current = delta;
-      if (Math.abs(delta) > 10) {
-        swiping.current = true;
-        e.preventDefault();
-      }
-      setOffsetX(delta);
-    };
-
-    const onTouchEnd = () => {
-      const delta = currentX.current;
-      if (delta > 100) {
-        onApproveRef.current();
-      } else if (delta < -100) {
-        onRejectRef.current();
-      }
-      setOffsetX(0);
-      currentX.current = 0;
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-    };
-  }, []);
-
-  const handleClick = () => {
-    if (swiping.current) return;
-    onTap();
-  };
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl">
-      <div className="absolute inset-0 flex" dir="ltr">
-        <div className={`flex-1 flex items-center justify-start pl-5 rounded-2xl transition-colors ${offsetX > 50 ? "bg-green-400" : "bg-green-100"}`}>
-          <span className="text-2xl">✅</span>
-        </div>
-        <div className={`flex-1 flex items-center justify-end pr-5 rounded-2xl transition-colors ${offsetX < -50 ? "bg-red-400" : "bg-red-100"}`}>
-          <span className="text-2xl">❌</span>
-        </div>
-      </div>
-      <div
-        ref={cardRef}
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: offsetX === 0 ? "transform 0.3s ease-out" : "none",
-          touchAction: "pan-y",
-        }}
-        onClick={handleClick}
-        className="relative cursor-pointer"
-      >
-        <TaskCard task={task} variant="pending" />
-        <div className="absolute top-2 left-2 flex gap-1.5 z-10" onClick={(e) => e.stopPropagation()}>
-          <button onClick={onApprove} className="w-8 h-8 rounded-full bg-green-100 hover:bg-green-300 flex items-center justify-center transition-colors" title="אישור">✅</button>
-          <button onClick={onReject} className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-300 flex items-center justify-center transition-colors" title="דחייה">❌</button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function PendingInbox({ tasks, onApprove, onReject, onUpdate }: PendingInboxProps) {
@@ -134,11 +35,22 @@ export default function PendingInbox({ tasks, onApprove, onReject, onUpdate }: P
       {tasks.map((task) => (
         <SwipeableCard
           key={task.id}
-          task={task}
-          onApprove={() => onApprove(task.id)}
-          onReject={() => onReject(task.id)}
+          leftIcon="✅"
+          rightIcon="❌"
+          leftColor="bg-green-100"
+          leftActiveColor="bg-green-400"
+          rightColor="bg-red-100"
+          rightActiveColor="bg-red-400"
+          onSwipeRight={() => onApprove(task.id)}
+          onSwipeLeft={() => onReject(task.id)}
           onTap={() => setEditingTask(task)}
-        />
+        >
+          <TaskCard task={task} variant="pending" />
+          <div className="absolute top-2 left-2 flex gap-1.5 z-10" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => onApprove(task.id)} className="w-8 h-8 rounded-full bg-green-100 hover:bg-green-300 flex items-center justify-center transition-colors" title="אישור">✅</button>
+            <button onClick={() => onReject(task.id)} className="w-8 h-8 rounded-full bg-red-100 hover:bg-red-300 flex items-center justify-center transition-colors" title="דחייה">❌</button>
+          </div>
+        </SwipeableCard>
       ))}
       {editingTask && <EditTaskModal task={editingTask} onSave={(data) => { onUpdate(editingTask.id, data); setEditingTask(null); }} onClose={() => setEditingTask(null)} />}
     </div>

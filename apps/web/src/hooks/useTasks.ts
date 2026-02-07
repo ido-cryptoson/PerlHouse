@@ -47,9 +47,14 @@ export function useTasks() {
   }, [supabase, fetchTasks]);
 
   const deleteTask = useCallback(async (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
     const { error: e } = await supabase.from("tasks").delete().eq("id" as any, id);
-    if (e) setError(e.message);
-  }, [supabase]);
+    if (e) {
+      console.error('[useTasks] deleteTask error:', e);
+      setError(e.message);
+      fetchTasks();
+    }
+  }, [supabase, fetchTasks]);
 
   return { tasks, loading, error, updateTask, deleteTask, refetch: fetchTasks };
 }
