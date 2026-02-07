@@ -69,9 +69,10 @@ function hebrewDay(dateStr: string): string {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  if (d.toDateString() === today.toDateString()) return "היום";
-  if (d.toDateString() === tomorrow.toDateString()) return "מחר";
-  return d.toLocaleDateString("he-IL", { weekday: "long" });
+  const dateLabel = d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" });
+  if (d.toDateString() === today.toDateString()) return `היום, ${dateLabel}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `מחר, ${dateLabel}`;
+  return `${d.toLocaleDateString("he-IL", { weekday: "long" })}, ${dateLabel}`;
 }
 
 export default function WeatherTab() {
