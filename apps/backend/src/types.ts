@@ -92,6 +92,7 @@ export interface GreenAPIWebhookPayload {
     textMessageData?: { textMessage: string };
     extendedTextMessageData?: { text: string; description?: string; title?: string; forwardingScore?: number };
     imageMessageData?: { downloadUrl: string; caption?: string; jpegThumbnail?: string; mimeType?: string };
+    fileMessageData?: { downloadUrl: string; caption?: string; fileName?: string; jpegThumbnail?: string; mimeType?: string };
     audioMessageData?: { downloadUrl: string; mimeType?: string };
   };
 }

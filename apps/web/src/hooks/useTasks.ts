@@ -36,8 +36,10 @@ export function useTasks() {
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
     const { owner_name, owner_avatar_url, ...dbUpdates } = updates;
-    const { error: e } = await supabase.from("tasks").update({ ...dbUpdates, updated_at: new Date().toISOString() } as any).eq("id", id);
-    if (e) setError(e.message);
+    console.log('[useTasks] updateTask called:', id, dbUpdates);
+    const { data, error: e, count } = await supabase.from("tasks").update({ ...dbUpdates, updated_at: new Date().toISOString() } as any).eq("id", id).select();
+    console.log('[useTasks] updateTask result:', { data, error: e, count });
+    if (e) { console.error('[useTasks] updateTask error:', e); setError(e.message); }
   }, [supabase]);
 
   const deleteTask = useCallback(async (id: string) => {

@@ -54,7 +54,7 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
       case 'imageMessage': {
         contentType = 'image';
         sourceType = 'whatsapp_image';
-        const imgData = messageData.imageMessageData;
+        const imgData = messageData.imageMessageData ?? messageData.fileMessageData;
         if (!imgData?.downloadUrl) { console.warn('[Webhook] Image with no URL'); return; }
         textContent = imgData.caption ?? '';
         try {
@@ -66,7 +66,7 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
       case 'audioMessage': {
         contentType = 'voice';
         sourceType = 'whatsapp_voice';
-        const audioData = messageData.audioMessageData;
+        const audioData = messageData.audioMessageData ?? messageData.fileMessageData;
         if (!audioData?.downloadUrl) { console.warn('[Webhook] Audio with no URL'); return; }
         try {
           const audioBuffer = await downloadMedia(audioData.downloadUrl);
