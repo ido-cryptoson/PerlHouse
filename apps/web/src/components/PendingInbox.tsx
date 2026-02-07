@@ -84,11 +84,11 @@ function SwipeableCard({
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      <div className="absolute inset-0 flex">
-        <div className={`flex-1 flex items-center justify-start ps-5 rounded-2xl transition-colors ${offsetX > 50 ? "bg-green-400" : "bg-green-100"}`}>
+      <div className="absolute inset-0 flex" dir="ltr">
+        <div className={`flex-1 flex items-center justify-start pl-5 rounded-2xl transition-colors ${offsetX > 50 ? "bg-green-400" : "bg-green-100"}`}>
           <span className="text-2xl">✅</span>
         </div>
-        <div className={`flex-1 flex items-center justify-end pe-5 rounded-2xl transition-colors ${offsetX < -50 ? "bg-red-400" : "bg-red-100"}`}>
+        <div className={`flex-1 flex items-center justify-end pr-5 rounded-2xl transition-colors ${offsetX < -50 ? "bg-red-400" : "bg-red-100"}`}>
           <span className="text-2xl">❌</span>
         </div>
       </div>

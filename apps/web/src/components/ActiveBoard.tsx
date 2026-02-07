@@ -17,17 +17,10 @@ interface ActiveBoardProps {
 export default function ActiveBoard({ tasks, currentMemberId, onDone, onUpdate }: ActiveBoardProps) {
   const [filter, setFilter] = useState<OwnerFilter>("all");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
 
   const filteredTasks = tasks
     .filter((t) => filter === "mine" ? t.owner_id === currentMemberId : filter === "theirs" ? t.owner_id !== currentMemberId : true)
     .sort((a, b) => (!a.due_date ? 1 : !b.due_date ? -1 : new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
-
-  const handleDone = (id: string) => { setCompletingId(id); setTimeout(() => { onDone(id); setCompletingId(null); }, 500); };
-
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  const handlePointerDown = (task: Task) => { longPressTimer = setTimeout(() => setEditingTask(task), 600); };
-  const handlePointerUp = () => { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } };
 
   const filters: { key: OwnerFilter; label: string }[] = [{ key: "all", label: "הכל" }, { key: "mine", label: "שלי" }, { key: "theirs", label: "שלה/שלו" }];
 
@@ -46,8 +39,17 @@ export default function ActiveBoard({ tasks, currentMemberId, onDone, onUpdate }
       ) : (
         <div className="space-y-3">
           {filteredTasks.map((task) => (
-            <div key={task.id} className={`transition-all duration-500 ${completingId === task.id ? "opacity-0 scale-95" : ""}`} onClick={() => handleDone(task.id)} onPointerDown={() => handlePointerDown(task)} onPointerUp={handlePointerUp} onPointerLeave={handlePointerUp}>
-              <TaskCard task={task} variant="active" />
+            <div key={task.id} className="flex items-center gap-2">
+              <button
+                onClick={() => onDone(task.id)}
+                className="flex-shrink-0 w-7 h-7 rounded-full border-2 border-stone-300 hover:border-green-400 hover:bg-green-50 flex items-center justify-center transition-colors active:bg-green-100"
+                title="סיום משימה"
+              >
+                <span className="text-green-500 text-sm opacity-0 hover:opacity-100">✓</span>
+              </button>
+              <div className="flex-1 min-w-0" onClick={() => setEditingTask(task)}>
+                <TaskCard task={task} variant="active" />
+              </div>
             </div>
           ))}
         </div>
