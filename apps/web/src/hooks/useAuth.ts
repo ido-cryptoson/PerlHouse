@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useSupabase } from "@/components/SupabaseProvider";
 import type { User } from "@supabase/supabase-js";
 import type { Member, Household } from "@/types/database";
 
 export function useAuth() {
   const { supabase } = useSupabase();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [member, setMember] = useState<Member | null>(null);
   const [household, setHousehold] = useState<(Household & { members: Member[] }) | null>(null);
@@ -36,5 +38,10 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  return { user, member, household, loading };
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }, [supabase, router]);
+
+  return { user, member, household, loading, signOut };
 }

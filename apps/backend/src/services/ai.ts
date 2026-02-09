@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { TaskExtraction } from '../types';
+import { TaskExtraction, TaskExtractionItem } from '../types';
 
-const MODEL = 'claude-sonnet-4-5-20250929';
+const MODEL = 'claude-haiku-4-5-20251001';
 const anthropic = new Anthropic();
 
 function buildSystemPrompt(): string {
@@ -21,6 +21,7 @@ function buildSystemPrompt(): string {
 6. קטגוריות: בית, ילדים, כספים, בריאות, קניות, רכב, כללי.
 7. confidence: 0-1.
 8. reply_suggestion: הצע תגובה קצרה בעברית אם רלוונטי.
+9. חובה: due_date ו-due_time הם שדות חובה. אם ההודעה כוללת תאריך ושעה — מלא אותם. אם חסר תאריך או שעה, עדיין חלץ את המשימה אבל השאר את השדה החסר כ-null.
 
 ## פורמט — JSON בלבד:
 {
@@ -95,13 +96,53 @@ export async function extractTasks(
   throw new Error('[AI] Unreachable');
 }
 
+export interface PendingTaskContext {
+  tasks: TaskExtractionItem[];
+  sourceType: 'whatsapp_text' | 'whatsapp_image' | 'whatsapp_voice';
+  sourceRaw: string;
+}
+
+export async function resolveMissingDateTime(
+  pendingTasks: TaskExtractionItem[],
+  userReply: string,
+): Promise<TaskExtractionItem[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const todayDayName = dayNames[new Date().getDay()];
+
+  const tasksJson = JSON.stringify(pendingTasks, null, 2);
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: `אתה מערכת לעדכון משימות. התאריך היום: ${today} (יום ${todayDayName}).
+קיבלת רשימת משימות שחסר להן תאריך או שעה, ותשובה מהמשתמש שמכילה את המידע החסר.
+עדכן את המשימות עם התאריך/שעה שהמשתמש סיפק.
+המר שמות ימים בעברית לתאריכים. "מחר" = מחר, "יום שלישי" = תאריך יום שלישי הקרוב.
+החזר את רשימת המשימות המעודכנת כ-JSON array בלבד. אל תעטוף ב-markdown.`,
+    messages: [{
+      role: 'user',
+      content: `משימות ממתינות:\n${tasksJson}\n\nתשובת המשתמש:\n${userReply}`,
+    }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === 'text');
+  if (!textBlock || textBlock.type !== 'text') return pendingTasks;
+
+  let raw = textBlock.text.trim();
+  if (raw.startsWith('```')) {
+    raw = raw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  }
+  return JSON.parse(raw) as TaskExtractionItem[];
+}
+
 function buildUserContent(
   content: string,
   type: 'text' | 'image' | 'voice',
   imageBase64?: string,
 ): Anthropic.MessageCreateParams['messages'][0]['content'] {
   if (type === 'image' && imageBase64) {
-    const parts: any[] = [
+    const parts: Anthropic.MessageCreateParams['messages'][0]['content'] = [
       { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
     ];
     parts.push({
@@ -112,4 +153,18 @@ function buildUserContent(
   }
   const prefix = type === 'voice' ? 'תמלול הודעה קולית' : 'הודעת וואטסאפ';
   return `${prefix}:\n\n${content}`;
+}
+
+// Warm up the Anthropic connection on startup
+export async function warmupAI(): Promise<void> {
+  try {
+    await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+    console.log('[AI] Connection warmed up');
+  } catch (err) {
+    console.error('[AI] Warmup failed:', err);
+  }
 }

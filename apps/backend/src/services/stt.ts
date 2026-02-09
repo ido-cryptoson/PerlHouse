@@ -9,7 +9,7 @@ export async function transcribeVoiceNote(audioBuffer: Buffer): Promise<string> 
     audio: { content: audioBytes },
     config: {
       encoding: 'OGG_OPUS' as const,
-      sampleRateHertz: 48000,
+      sampleRateHertz: 16000,
       languageCode: 'he-IL',
       enableAutomaticPunctuation: true,
     },

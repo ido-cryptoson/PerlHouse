@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { GreenAPIWebhookPayload, TaskInsert, TaskCategory } from '../types';
-import { extractTasks } from '../services/ai';
+import { GreenAPIWebhookPayload, TaskInsert, TaskCategory, TaskExtractionItem } from '../types';
+import { extractTasks, resolveMissingDateTime, PendingTaskContext } from '../services/ai';
 import { downloadMedia, sendMessage, readChat } from '../services/greenapi';
 import { transcribeVoiceNote } from '../services/stt';
 import { createTask, getMemberByPhone, getHouseholdMembers } from '../services/supabase';
@@ -9,8 +9,17 @@ import { notifyHouseholdMembers } from '../services/notifications';
 const router = Router();
 const MANUAL_PREFIX = 'משימה:';
 
+// In-memory store for conversations awaiting date/time info.
+// Key = chatId, auto-expires after 10 minutes.
+const pendingContexts = new Map<string, { ctx: PendingTaskContext; memberId: string; householdId: string; timer: ReturnType<typeof setTimeout> }>();
+const PENDING_TTL = 10 * 60 * 1000;
+
+function clearPending(chatId: string) {
+  const entry = pendingContexts.get(chatId);
+  if (entry) { clearTimeout(entry.timer); pendingContexts.delete(chatId); }
+}
+
 router.post('/greenapi', async (req: Request, res: Response) => {
-  // Return 200 immediately so Green API doesn't retry
   res.status(200).json({ ok: true });
 
   const payload = req.body as GreenAPIWebhookPayload;
@@ -28,12 +37,15 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
     const chatId = senderData.chatId;
     const senderPhone = senderData.sender.replace('@c.us', '');
 
+    const t0 = Date.now();
     console.log(`[Webhook] Processing ${typeMessage} from ${senderData.senderName} (${chatId})`);
 
-    // Mark message as read (human-like behavior)
-    try { await readChat(chatId, idMessage); } catch {};
+    // Mark message as read
+    try { await readChat(chatId, idMessage); } catch { /* ignore */ }
+    console.log(`[Webhook] [${Date.now() - t0}ms] readChat done`);
 
     const member = await getMemberByPhone(senderPhone);
+    console.log(`[Webhook] [${Date.now() - t0}ms] getMemberByPhone done`);
     if (!member) {
       console.warn(`[Webhook] Unknown sender: ${senderPhone}`);
       return;
@@ -83,6 +95,47 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
 
     if (!textContent && !imageBase64) return;
 
+    // Check if this is a reply to a pending date/time question
+    const pending = pendingContexts.get(chatId);
+    if (pending && textContent) {
+      console.log(`[Webhook] Resolving pending tasks for ${chatId} with reply: "${textContent.slice(0, 60)}"`);
+      clearPending(chatId);
+
+      try {
+        const resolved = await resolveMissingDateTime(pending.ctx.tasks, textContent);
+
+        // Check if still missing date or time
+        const stillIncomplete = resolved.filter((t) => !t.due_date || !t.due_time);
+        if (stillIncomplete.length > 0) {
+          const missing = stillIncomplete.map((t) => {
+            const parts: string[] = [];
+            if (!t.due_date) parts.push('תאריך');
+            if (!t.due_time) parts.push('שעה');
+            return `${t.icon} ${t.title} — חסר: ${parts.join(' ו')}`;
+          }).join('\n');
+          try { await sendMessage(chatId, `עדיין חסר מידע:\n${missing}\n\nאנא שלח את הפרטים החסרים.`); }
+          catch (err) { console.error('[Webhook] Reply failed:', err); }
+
+          // Re-store pending with updated tasks
+          const timer = setTimeout(() => pendingContexts.delete(chatId), PENDING_TTL);
+          pendingContexts.set(chatId, {
+            ctx: { ...pending.ctx, tasks: resolved },
+            memberId: pending.memberId,
+            householdId: pending.householdId,
+            timer,
+          });
+          return;
+        }
+
+        // All complete — create tasks
+        await createAndNotify(resolved, pending.ctx.sourceType, pending.ctx.sourceRaw, pending.householdId, chatId);
+      } catch (err) {
+        console.error('[Webhook] Error resolving pending tasks:', err);
+        try { await sendMessage(chatId, '❌ שגיאה בעיבוד. נסה לשלוח את המשימה שוב.'); } catch { /* ignore */ }
+      }
+      return;
+    }
+
     // Manual task prefix
     let isManualTask = false;
     if (textContent.startsWith(MANUAL_PREFIX)) {
@@ -91,64 +144,112 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
     }
 
     // AI extraction
+    console.log(`[Webhook] [${Date.now() - t0}ms] calling AI extractTasks...`);
     const extraction = await extractTasks(textContent, contentType, imageBase64);
+    console.log(`[Webhook] [${Date.now() - t0}ms] AI extractTasks done`);
 
     if (extraction.not_a_task && !isManualTask) {
       console.log('[Webhook] Not a task — skipping');
       return;
     }
 
-    // Store tasks
-    const createdTaskIds: string[] = [];
-    for (const task of extraction.tasks) {
-      const taskInsert: TaskInsert = {
-        household_id: member.household_id,
-        title: task.title,
-        description: task.description,
-        status: 'pending',
-        owner_id: null,
-        icon: task.icon,
-        category: task.category as TaskCategory,
-        due_date: task.due_date,
-        due_time: task.due_time,
-        calendar_event_id: null,
-        source_type: sourceType,
-        source_raw: textContent,
-        needs_calendar_event: task.needs_calendar_event,
-        ai_confidence: task.confidence,
-        reply_suggestion: extraction.reply_suggestion,
-        approved_at: null,
-        completed_at: null,
-      };
-      try {
-        const result = await createTask(taskInsert);
-        if (result) createdTaskIds.push(result.id);
-      } catch (err) { console.error('[Webhook] Task creation failed:', err); }
+    // Split tasks into complete (has date+time) and incomplete
+    const completeTasks = extraction.tasks.filter((t) => t.due_date && t.due_time);
+    const incompleteTasks = extraction.tasks.filter((t) => !t.due_date || !t.due_time);
+
+    // Create complete tasks immediately
+    if (completeTasks.length > 0) {
+      await createAndNotify(completeTasks, sourceType, textContent, member.household_id, chatId);
     }
 
-    // WhatsApp reply
-    if (extraction.reply_suggestion && createdTaskIds.length > 0) {
-      try { await sendMessage(chatId, extraction.reply_suggestion); }
+    // Ask for missing date/time on incomplete tasks
+    if (incompleteTasks.length > 0) {
+      const missing = incompleteTasks.map((t) => {
+        const parts: string[] = [];
+        if (!t.due_date) parts.push('תאריך');
+        if (!t.due_time) parts.push('שעה');
+        return `${t.icon} ${t.title} — חסר: ${parts.join(' ו')}`;
+      }).join('\n');
+
+      const askMsg = `📋 זיהיתי משימות אבל חסר מידע:\n${missing}\n\nמתי לתזמן? (שלח תאריך ושעה)`;
+      console.log(`[Webhook] [${Date.now() - t0}ms] sending WhatsApp reply...`);
+      try { await sendMessage(chatId, askMsg); }
       catch (err) { console.error('[Webhook] Reply failed:', err); }
+      console.log(`[Webhook] [${Date.now() - t0}ms] WhatsApp reply sent`);
+
+      // Store pending context
+      clearPending(chatId);
+      const timer = setTimeout(() => pendingContexts.delete(chatId), PENDING_TTL);
+      pendingContexts.set(chatId, {
+        ctx: { tasks: incompleteTasks, sourceType, sourceRaw: textContent },
+        memberId: member.id,
+        householdId: member.household_id,
+        timer,
+      });
     }
 
-    // Push notifications
-    if (createdTaskIds.length > 0) {
-      try {
-        const members = await getHouseholdMembers(member.household_id);
-        const titles = extraction.tasks.map((t) => `${t.icon} ${t.title}`).join('\n');
-        await notifyHouseholdMembers(members, {
-          title: 'משימה חדשה בבית 🏠',
-          body: titles,
-          icon: '/icons/icon-192x192.png',
-          data: { type: 'new_tasks', taskIds: createdTaskIds },
-        });
-      } catch (err) { console.error('[Webhook] Push notification failed:', err); }
-    }
-
-    console.log(`[Webhook] Processed ${idMessage}: ${createdTaskIds.length} task(s) created`);
+    console.log(`[Webhook] Processed ${idMessage}: ${completeTasks.length} created, ${incompleteTasks.length} pending date/time`);
   } catch (error) {
     console.error('[Webhook] Error:', error);
+  }
+}
+
+async function createAndNotify(
+  tasks: TaskExtractionItem[],
+  sourceType: 'whatsapp_text' | 'whatsapp_image' | 'whatsapp_voice',
+  sourceRaw: string,
+  householdId: string,
+  chatId: string,
+): Promise<void> {
+  const createdTaskIds: string[] = [];
+  for (const task of tasks) {
+    const taskInsert: TaskInsert = {
+      household_id: householdId,
+      title: task.title,
+      description: task.description,
+      status: 'pending',
+      owner_id: null,
+      icon: task.icon,
+      category: task.category as TaskCategory,
+      due_date: task.due_date,
+      due_time: task.due_time,
+      calendar_event_id: null,
+      source_type: sourceType,
+      source_raw: sourceRaw,
+      needs_calendar_event: task.needs_calendar_event,
+      ai_confidence: task.confidence,
+      reply_suggestion: null,
+      approved_at: null,
+      completed_at: null,
+    };
+    try {
+      const result = await createTask(taskInsert);
+      if (result) createdTaskIds.push(result.id);
+    } catch (err) { console.error('[Webhook] Task creation failed:', err); }
+  }
+
+  // WhatsApp confirmation
+  if (createdTaskIds.length > 0) {
+    const taskTitles = tasks.map((t) => `${t.icon} ${t.title}`).join('\n');
+    const confirmMsg = createdTaskIds.length === 1
+      ? `✅ המשימה נוספה:\n${taskTitles}`
+      : `✅ ${createdTaskIds.length} משימות נוספו:\n${taskTitles}`;
+    try { await sendMessage(chatId, confirmMsg); }
+    catch (err) { console.error('[Webhook] Reply failed:', err); }
+  }
+
+  // Push notifications
+  if (createdTaskIds.length > 0) {
+    try {
+      const members = await getHouseholdMembers(householdId);
+      const titles = tasks.map((t) => `${t.icon} ${t.title}`).join('\n');
+      await notifyHouseholdMembers(members, {
+        title: 'משימה חדשה בבית 🏠',
+        body: titles,
+        icon: '/icons/icon-192x192.png',
+        data: { type: 'new_tasks', taskIds: createdTaskIds },
+      });
+    } catch (err) { console.error('[Webhook] Push notification failed:', err); }
   }
 }
 

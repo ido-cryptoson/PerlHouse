@@ -10,10 +10,17 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=18.17.0",
     "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node-cron": "^3.0.11"
   }
 }

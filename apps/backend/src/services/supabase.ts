@@ -31,3 +31,13 @@ export async function getMemberByPhone(phone: string): Promise<Member | null> {
   if (error) { console.error('[Supabase] Fetch member error:', error); throw error; }
   return (data as Member) ?? null;
 }
+
+// Warm up the Supabase connection on startup
+export async function warmupSupabase(): Promise<void> {
+  try {
+    await db().from('households').select('id').limit(1);
+    console.log('[Supabase] Connection warmed up');
+  } catch (err) {
+    console.error('[Supabase] Warmup failed:', err);
+  }
+}

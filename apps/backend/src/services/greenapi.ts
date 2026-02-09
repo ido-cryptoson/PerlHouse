@@ -20,9 +20,7 @@ export async function downloadMedia(downloadUrl: string): Promise<Buffer> {
 }
 
 export async function sendMessage(chatId: string, message: string): Promise<void> {
-  // Random delay (3-8s) to mimic human typing and avoid WhatsApp detection
-  const delay = 3000 + Math.random() * 5000;
-  await new Promise((r) => setTimeout(r, delay));
+  // Green API's delaySendMessagesMilliseconds handles anti-detection delay server-side
   const url = `${BASE_URL}/waInstance${getInstanceId()}/sendMessage/${getToken()}`;
   await axios.post(url, { chatId, message }, { timeout: 15_000 });
 }
