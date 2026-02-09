@@ -32,6 +32,11 @@ export async function getMemberByPhone(phone: string): Promise<Member | null> {
   return (data as Member) ?? null;
 }
 
+export async function updateTaskCalendarEventId(taskId: string, calendarEventId: string): Promise<void> {
+  const { error } = await db().from('tasks').update({ calendar_event_id: calendarEventId }).eq('id', taskId);
+  if (error) { console.error('[Supabase] Update calendar_event_id error:', error); throw error; }
+}
+
 // Warm up the Supabase connection on startup
 export async function warmupSupabase(): Promise<void> {
   try {

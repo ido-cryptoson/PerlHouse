@@ -94,5 +94,11 @@ export interface GreenAPIWebhookPayload {
     imageMessageData?: { downloadUrl: string; caption?: string; jpegThumbnail?: string; mimeType?: string };
     fileMessageData?: { downloadUrl: string; caption?: string; fileName?: string; jpegThumbnail?: string; mimeType?: string };
     audioMessageData?: { downloadUrl: string; mimeType?: string };
+    pollMessageData?: {
+      stanzaId: string;
+      name: string;
+      votes: Array<{ optionName: string; optionVoters: string[] }>;
+      multipleAnswers: boolean;
+    };
   };
 }

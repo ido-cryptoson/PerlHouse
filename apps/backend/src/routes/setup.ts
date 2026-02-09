@@ -29,6 +29,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       outgoingMessageWebhook: 'no',
       outgoingAPIMessageWebhook: 'no',
       stateWebhook: 'yes',
+      pollMessageWebhook: 'yes',
       markIncomingMessagesReaded: 'yes',
       markIncomingMessagesReadedOnReply: 'yes',
       keepOnlineStatus: 'yes',

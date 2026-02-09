@@ -25,6 +25,17 @@ export async function sendMessage(chatId: string, message: string): Promise<void
   await axios.post(url, { chatId, message }, { timeout: 15_000 });
 }
 
+export async function sendPoll(
+  chatId: string,
+  message: string,
+  options: Array<{ optionName: string }>,
+  multipleAnswers = false,
+): Promise<{ idMessage: string }> {
+  const url = `${BASE_URL}/waInstance${getInstanceId()}/sendPoll/${getToken()}`;
+  const response = await axios.post(url, { chatId, message, options, multipleAnswers }, { timeout: 15_000 });
+  return response.data;
+}
+
 export async function readChat(chatId: string, idMessage: string): Promise<void> {
   const url = `${BASE_URL}/waInstance${getInstanceId()}/readChat/${getToken()}`;
   await axios.post(url, { chatId, idMessage }, { timeout: 10_000 });

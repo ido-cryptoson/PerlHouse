@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { GreenAPIWebhookPayload, TaskInsert, TaskCategory, TaskExtractionItem } from '../types';
 import { extractTasks, resolveMissingDateTime, PendingTaskContext } from '../services/ai';
-import { downloadMedia, sendMessage, readChat } from '../services/greenapi';
+import { downloadMedia, sendMessage, sendPoll, readChat } from '../services/greenapi';
 import { transcribeVoiceNote } from '../services/stt';
-import { createTask, getMemberByPhone, getHouseholdMembers } from '../services/supabase';
+import { createTask, getMemberByPhone, getHouseholdMembers, updateTaskCalendarEventId } from '../services/supabase';
 import { notifyHouseholdMembers } from '../services/notifications';
+import { createCalendarEvent } from '../services/calendar';
 
 const router = Router();
 const MANUAL_PREFIX = 'משימה:';
@@ -17,6 +18,28 @@ const PENDING_TTL = 10 * 60 * 1000;
 function clearPending(chatId: string) {
   const entry = pendingContexts.get(chatId);
   if (entry) { clearTimeout(entry.timer); pendingContexts.delete(chatId); }
+}
+
+// In-memory store for calendar poll responses.
+// Key = poll stanzaId (idMessage returned by sendPoll).
+const WIFE_EMAIL = 'litalbenn1@gmail.com';
+const CALENDAR_POLL_TTL = 30 * 60 * 1000;
+const POLL_YES_ME = 'כן, רק לי';
+const POLL_YES_WIFE = 'כן, גם לאשתי';
+const POLL_NO = 'לא, תודה';
+
+interface PendingCalendarPoll {
+  taskIds: string[];
+  tasks: Array<{ title: string; description: string | null; due_date: string; due_time: string }>;
+  chatId: string;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingCalendarPolls = new Map<string, PendingCalendarPoll>();
+
+function clearCalendarPoll(stanzaId: string) {
+  const entry = pendingCalendarPolls.get(stanzaId);
+  if (entry) { clearTimeout(entry.timer); pendingCalendarPolls.delete(stanzaId); }
 }
 
 router.post('/greenapi', async (req: Request, res: Response) => {
@@ -43,6 +66,61 @@ async function processWebhook(payload: GreenAPIWebhookPayload): Promise<void> {
     // Mark message as read
     try { await readChat(chatId, idMessage); } catch { /* ignore */ }
     console.log(`[Webhook] [${Date.now() - t0}ms] readChat done`);
+
+    // Handle poll vote responses (calendar polls)
+    if (typeMessage === 'pollUpdateMessage') {
+      const pollData = messageData.pollMessageData;
+      if (!pollData) return;
+
+      const pending = pendingCalendarPolls.get(pollData.stanzaId);
+      if (!pending) {
+        console.log(`[Webhook] Poll update for unknown stanzaId: ${pollData.stanzaId}`);
+        return;
+      }
+
+      const selectedVote = pollData.votes.find(
+        (v) => v.optionVoters.length > 0 && v.optionVoters.includes(senderData.sender),
+      );
+      if (!selectedVote) return;
+
+      const selectedOption = selectedVote.optionName;
+      console.log(`[Webhook] Calendar poll response: "${selectedOption}" from ${senderData.senderName}`);
+      clearCalendarPoll(pollData.stanzaId);
+
+      if (selectedOption === POLL_YES_ME || selectedOption === POLL_YES_WIFE) {
+        const attendeeEmails = selectedOption === POLL_YES_WIFE ? [WIFE_EMAIL] : [];
+
+        for (let i = 0; i < pending.tasks.length; i++) {
+          const task = pending.tasks[i];
+          const taskId = pending.taskIds[i];
+          try {
+            const eventId = await createCalendarEvent({
+              title: task.title,
+              description: task.description,
+              date: task.due_date,
+              time: task.due_time,
+              attendeeEmails,
+            });
+            if (eventId && taskId) {
+              await updateTaskCalendarEventId(taskId, eventId);
+            }
+          } catch (err) {
+            console.error(`[Webhook] Calendar event creation failed for task ${taskId}:`, err);
+          }
+        }
+
+        const calMsg = pending.tasks.length === 1
+          ? `📅 האירוע נוסף ליומן: ${pending.tasks[0].title}`
+          : `📅 ${pending.tasks.length} אירועים נוספו ליומן`;
+        const fullMsg = attendeeEmails.length > 0 ? `${calMsg}\n📧 הזמנה נשלחה גם ל-${WIFE_EMAIL}` : calMsg;
+        try { await sendMessage(pending.chatId, fullMsg); }
+        catch (err) { console.error('[Webhook] Calendar confirmation failed:', err); }
+      } else {
+        try { await sendMessage(pending.chatId, '👍 בסדר, לא נוסף ליומן.'); }
+        catch (err) { console.error('[Webhook] Calendar decline msg failed:', err); }
+      }
+      return;
+    }
 
     const member = await getMemberByPhone(senderPhone);
     console.log(`[Webhook] [${Date.now() - t0}ms] getMemberByPhone done`);
@@ -250,6 +328,43 @@ async function createAndNotify(
         data: { type: 'new_tasks', taskIds: createdTaskIds },
       });
     } catch (err) { console.error('[Webhook] Push notification failed:', err); }
+  }
+
+  // Send calendar poll for tasks with due_date + due_time
+  const calendarTasks = tasks.filter((t, i) => t.due_date && t.due_time && createdTaskIds[i]);
+  if (calendarTasks.length > 0) {
+    try {
+      const taskSummary = calendarTasks.map((t) => `${t.icon} ${t.title}`).join('\n');
+      const pollMessage = calendarTasks.length === 1
+        ? `📅 להוסיף ליומן Google?\n${taskSummary}`
+        : `📅 להוסיף ${calendarTasks.length} אירועים ליומן Google?\n${taskSummary}`;
+
+      const pollResult = await sendPoll(chatId, pollMessage, [
+        { optionName: POLL_YES_ME },
+        { optionName: POLL_YES_WIFE },
+        { optionName: POLL_NO },
+      ], false);
+
+      const stanzaId = pollResult.idMessage;
+      const calendarTaskDetails = calendarTasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        due_date: t.due_date!,
+        due_time: t.due_time!,
+      }));
+      const calendarTaskIds = calendarTasks.map((t) => {
+        const idx = tasks.indexOf(t);
+        return createdTaskIds[idx];
+      });
+
+      clearCalendarPoll(stanzaId);
+      const timer = setTimeout(() => pendingCalendarPolls.delete(stanzaId), CALENDAR_POLL_TTL);
+      pendingCalendarPolls.set(stanzaId, { taskIds: calendarTaskIds, tasks: calendarTaskDetails, chatId, timer });
+
+      console.log(`[Webhook] Calendar poll sent (stanzaId: ${stanzaId}) for ${calendarTasks.length} tasks`);
+    } catch (err) {
+      console.error('[Webhook] Calendar poll send failed:', err);
+    }
   }
 }
 
